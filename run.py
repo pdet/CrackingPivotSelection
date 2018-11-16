@@ -76,6 +76,29 @@ for query in QUERY_PATTERNS:
 experiment_path = column_path(SKEWED,COLUMN_SIZE,UPPERBOUND)
 generate_column(SKEWED,COLUMN_SIZE,UPPERBOUND,experiment_path + "column")
 # Skewed Queries
-q_path = query_path(experiment_path,QUERY_SELECTIVITY,MIXED)
-a_path = answer_path(experiment_path,QUERY_SELECTIVITY,MIXED)
-generate_query(NUM_QUERIES,COLUMN_SIZE,UPPERBOUND,experiment_path,q_path,a_path,QUERY_SELECTIVITY,MIXED)
+q_path = query_path(experiment_path,QUERY_SELECTIVITY,SKEWED)
+a_path = answer_path(experiment_path,QUERY_SELECTIVITY,SKEWED)
+generate_query(NUM_QUERIES,COLUMN_SIZE,UPPERBOUND,experiment_path,q_path,a_path,QUERY_SELECTIVITY,SKEWED)
+
+
+def run_experiment(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND,QUERY_PATTERN,QUERY_SELECTIVITY,experiment_test):
+    COLUMN_PATH = column_path(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND)
+    QUERY_PATH = query_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
+    ANSWER_PATH = answer_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
+    for algorithm in experiment_test:
+        codestr ="./main --num-queries=" + str(NUM_QUERIES) + " --column-size=" + str(COLUMN_SIZE) + \
+                 " --pivot-type="+str(algorithm)+ " --column-path=" + str(COLUMN_PATH + "column") + " --query-path=" \
+                 + str(QUERY_PATH) + " --answer-path=" + str(ANSWER_PATH)
+        print(codestr)
+        if os.system(codestr) != 0:
+            print("Failed!")
+
+def test_correctness():
+    experiment_test = [PIVOT_WORKLOAD]
+    run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,RANDOM,QUERY_SELECTIVITY,experiment_test)
+    run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,SEQUENTIAL,QUERY_SELECTIVITY,experiment_test)
+    run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,experiment_test)
+    run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,MIXED,QUERY_SELECTIVITY,experiment_test)
+    run_experiment(SKEWED,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,experiment_test)
+
+test_correctness()

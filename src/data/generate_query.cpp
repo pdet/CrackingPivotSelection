@@ -24,20 +24,10 @@ int64_t apply_selectivity(int64_t leftQuery,int64_t* answer, vector<int64_t> *c)
             selec++;
             *answer += c->at(i);
         }
-        if ((selec >= aux && c->at(i) != c->at(i+1))|| i ==  c->size()-1){
-            return c->at(i);
+        if ((selec >= aux && c->at(i) != c->at(i+1))|| i ==  c->size()-2){
+            return c->at(i+1);
         }
     }
-}
-
-int64_t calculate_answer(int64_t pointQuery, vector<int64_t> *c){
-    int64_t answer = 0;
-    for (size_t i = 0; i < c->size(); i++) {
-        if (c->at(i) == pointQuery){
-            answer += c->at(i);
-        }
-    }
-    return answer;
 }
 
 void random(vector<int64_t> *leftQuery, vector<int64_t> *rightQuery,vector<int64_t> *queryAnswer, vector<int64_t> *orderedColumn, int64_t maxLeftQueryVal) {
@@ -52,7 +42,7 @@ void random(vector<int64_t> *leftQuery, vector<int64_t> *rightQuery,vector<int64
 }
 
 void sequential(vector<int64_t> *leftQuery,vector<int64_t> *rightQuery,vector<int64_t> *queryAnswer, vector<int64_t> *orderedColumn, int64_t maxLeftQueryVal){
-    int64_t lKey = 0;
+    int64_t lKey = orderedColumn->at(1);
     int64_t rKey;
     int64_t jump = UPPERBOUND * 0.01; // Variance of 1%
     int64_t answer;
@@ -226,7 +216,7 @@ void mixed(vector<int64_t> *leftQuery,vector<int64_t> *rightQuery, vector<int64_
             int64_t jump = UPPERBOUND * 0.01; // Variance of 1%
             int64_t lKey;
             if( i == 1)
-                lKey = 0;
+                lKey = orderedColumn->at(1);
             else
                 lKey = rightQuery[0][i*switch_workload-1];
             if (lKey > maxLeftQueryVal)
@@ -240,7 +230,7 @@ void mixed(vector<int64_t> *leftQuery,vector<int64_t> *rightQuery, vector<int64_
                 queryAnswer->push_back(answer);
                 lKey = rKey;
                 lKey += jump;
-                if (lKey > maxLeftQueryVal)
+                while (lKey > maxLeftQueryVal)
                     lKey = rand()%jump;
             }
         }

@@ -44,4 +44,6 @@ Makefile
 cmake_install.cmake
 generate_column
 generate_query
+CrackingPivotSelection.cbp
+main
 
