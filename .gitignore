@@ -30,3 +30,18 @@
 *.exe
 *.out
 *.app
+
+# Generated Folders
+.idea/
+CMakeFiles/
+cmake-build-debug/
+generated_data/
+
+# Generated Files
+CMakeCache.txt
+CrackingPibotSelection.cbp
+Makefile
+cmake_install.cmake
+generate_column
+generate_query
+
