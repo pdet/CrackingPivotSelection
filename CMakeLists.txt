@@ -29,4 +29,4 @@ add_executable(generate_query
         src/data/file_manager.cpp src/data/generate_query.cpp)
 
 add_executable(main
-        src/data/file_manager.cpp src/cracking/avl_tree.cpp src/cracking/standard_cracking.cpp src/main.cpp)
+        src/data/file_manager.cpp src/cracking/avl_tree.cpp src/util.cpp src/cracking/standard_cracking.cpp src/main.cpp)

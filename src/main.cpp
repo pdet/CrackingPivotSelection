@@ -28,32 +28,14 @@ const int PIVOT_MEDIAN_WITHIN_PIECE = 3;
 const int PIVOT_RANDOM = 4;
 const int PIVOT_RANDOM_MEDIAN = 5;
 const int PIVOT_MEDIAN = 6;
+int counter;
 
 string COLUMN_FILE_PATH, QUERIES_FILE_PATH, ANSWER_FILE_PATH;
-int64_t  COLUMN_SIZE;
-int NUM_QUERIES,PIVOT_TYPE;
+int64_t  COLUMN_SIZE,NUM_QUERIES;
+int PIVOT_TYPE;
 #define DEBUG
 
 using namespace std;
-
-int64_t scanQuery(IndexEntry * crackerindex, int64_t min_bounds, int64_t max_bounds, int64_t initial_offset, int64_t final_offset) {
-    int64_t sum = 0;
-    for(size_t i = initial_offset; i <= final_offset; i++) {
-        int matching =  (crackerindex[i].m_key >= min_bounds) && (crackerindex[i].m_key < max_bounds);
-        sum += matching * crackerindex[i].m_key;
-    }
-    return sum;
-}
-
-int64_t range_query_baseline(const std::vector<int64_t>& array, int64_t min_bounds, int64_t max_bounds) {
-    int64_t sum = 0;
-    for(size_t i = 0; i < array.size(); i++) {
-        int matching =  (array[i] >= min_bounds) && (array[i] < max_bounds);
-        sum += matching * array[i];
-    }
-    return sum;
-}
-
 
 void full_scan(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
     chrono::time_point<chrono::system_clock> start, end;
@@ -71,24 +53,60 @@ void full_scan(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answer
     }
 }
 
-void test_cracking(IndexEntry * crackerindex, int64_t min_bounds, int64_t max_bounds,int64_t offset_min,int64_t offset_max, int64_t final_offset){
-    for(size_t i = 0; i < offset_min; i++) {
-        if(crackerindex[i].m_key >= min_bounds)
-            fprintf(stderr, "error 1");
-    }
-    for(size_t i = offset_min; i <= offset_max; i++) {
-        if(crackerindex[i].m_key < min_bounds || crackerindex[i].m_key >= max_bounds)
-            fprintf(stderr, "error 2");
-    }
-    for(size_t i = offset_max+1; i < final_offset; i++) {
-        if(crackerindex[i].m_key < max_bounds)
-            fprintf(stderr, "error 3");
+void pivot_selection(AvlTree T,IndexEntry * crackerindex, int64_t * left_pivot, int64_t * right_pivot,
+                     int64_t left_query, int64_t right_query, int64_t * partitions){
+    int64_t rand_1,rand_2;
+    switch(PIVOT_TYPE){
+        case PIVOT_WORKLOAD:
+            *left_pivot = left_query;
+            *right_pivot = right_query;
+            break;
+//        case PIVOT_RANDOM_WITHIN_PIECE:
+//            left_pivot = rangeQueries.leftpredicate[i];
+//            right_pivot = rangeQueries.rightpredicate[i];
+//            break;
+//        case PIVOT_RANDOM_MEDIAN_WITHIN_PIECE:
+//            left_pivot = rangeQueries.leftpredicate[i];
+//            right_pivot = rangeQueries.rightpredicate[i];
+//            break;
+//        case PIVOT_MEDIAN_WITHIN_PIECE:
+//
+//            left_pivot = rangeQueries.leftpredicate[i];
+//            right_pivot = rangeQueries.rightpredicate[i];
+//            break;
+        case PIVOT_RANDOM:
+            rand_1 = rand() % COLUMN_SIZE;
+            rand_2 = rand() % COLUMN_SIZE;
+            *left_pivot = std::min(rand_1,rand_2);
+            *right_pivot = std::max(rand_1,rand_2);
+            break;
+        case PIVOT_RANDOM_MEDIAN:
+            *left_pivot = std::min(crackerindex[partitions[counter]].m_key,crackerindex[partitions[counter + 1]].m_key);
+            *right_pivot = std::max(crackerindex[partitions[counter]].m_key,crackerindex[partitions[counter+1]].m_key);
+            counter += 2;
+            break;
+        case PIVOT_MEDIAN:
+            *left_pivot =  find_median(crackerindex, partitions[counter], partitions[counter+1]);
+            *right_pivot = -1;
+            counter+=2;
+            break;
     }
 }
 
 void cracking(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
     chrono::time_point<chrono::system_clock> start, end;
     chrono::duration<double> elapsed_seconds;
+    int64_t * partitions = (int64_t *) malloc (NUM_QUERIES * sizeof(int64_t));
+    generate_partitions_order(partitions,1,column.data.size()-1);
+    switch(PIVOT_TYPE){
+        case PIVOT_RANDOM_MEDIAN:
+            generate_partitions_order(partitions,1,column.data.size()-1);
+            break;
+        case PIVOT_MEDIAN:
+            partitions[0] = 0;
+            partitions[1] = column.data.size()-1;
+            break;
+    }
     start = chrono::system_clock::now();
     IndexEntry *crackercolumn = (IndexEntry *) malloc(column.data.size() * 2 * sizeof(int64_t));
     //Creating Cracker Column
@@ -102,15 +120,17 @@ void cracking(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers
     time[0] += chrono::duration<double>(end - start).count();
 
     for (size_t i = 0; i < NUM_QUERIES; i++) {
+        int64_t left_pivot,right_pivot;
         start = chrono::system_clock::now();
+        pivot_selection((AvlTree)T,crackercolumn, &left_pivot, &right_pivot, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i],partitions);
+
         //Partitioning Column and Inserting in Cracker Indexing
-        T = standardCracking(crackercolumn , column.data.size(), T, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i]);
+        T = standardCracking(crackercolumn , column.data.size(), T, left_pivot, right_pivot);
         //Querying
         IntPair p1 = FindNeighborsGTE(rangeQueries.leftpredicate[i], (AvlTree)T, column.data.size()-1);
         IntPair p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], (AvlTree)T, column.data.size()-1);
         int64_t offset1 = p1->first;
         int64_t offset2 = p2->second;
-//        test_cracking(crackercolumn,rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i],offset1,offset2,column.data.size());
         free(p1);
         free(p2);
         int64_t sum = scanQuery(crackercolumn,rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i], offset1, offset2);
@@ -199,10 +219,5 @@ int main(int argc, char** argv) {
 
     vector<double> times(NUM_QUERIES);
 
-    switch(PIVOT_TYPE){
-        case PIVOT_WORKLOAD:
-            full_scan(c, rangequeries, answers, times);
-            break;
-    }
-
+    cracking(c, rangequeries, answers, times);
 }
