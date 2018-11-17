@@ -40,7 +40,6 @@ int64_t find_median(IndexEntry * crackerindex, int64_t lower_limit, int64_t uppe
 
     do
     {
-
         element = crackerindex[(high+low)/2].m_key;
         position = pivot(crackerindex, low, high, element, (high+low)/2);
 

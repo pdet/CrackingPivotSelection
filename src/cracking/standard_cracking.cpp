@@ -93,7 +93,6 @@ AvlTree standardCracking(IndexEntry*& c, int dataSize, AvlTree T, int lowKey, in
         pivot_pair->first = crackInTwoItemWise(c, p1->first, p1->second, lowKey);
         T = Insert(pivot_pair->first, lowKey, T);
         free(p1);
-        free(p2);
         if(pivot_pair) {
             free(pivot_pair);
             pivot_pair = NULL;
