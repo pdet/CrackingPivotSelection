@@ -32,7 +32,7 @@ const int PIVOT_MEDIAN = 6;
 string COLUMN_FILE_PATH, QUERIES_FILE_PATH, ANSWER_FILE_PATH;
 int64_t  COLUMN_SIZE,NUM_QUERIES;
 int PIVOT_TYPE;
-#define DEBUG
+// #define DEBUG
 
 using namespace std;
 

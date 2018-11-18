@@ -36,6 +36,7 @@
 CMakeFiles/
 cmake-build-debug/
 generated_data/
+ResultsCSV/
 
 # Generated Files
 CMakeCache.txt
