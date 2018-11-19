@@ -6,6 +6,7 @@
 
 extern int64_t NUM_QUERIES;
 int64_t num_partitions = 0;
+
 void exchange(IndexEntry*& c, int64_t x1, int64_t x2){
     IndexEntry tmp = *(c+x1);
     *(c+x1) = *(c+x2);
@@ -95,4 +96,12 @@ void generate_partitions_order(int64_t * partitions, int64_t min, int64_t max){
     generate_partitions_order(partitions , min, medium);
     generate_partitions_order(partitions , medium, max);
 
+}
+
+int64_t scanQuery(IndexEntry * crackerindex, int64_t final_offset) {
+    int64_t sum = 0;
+    for(size_t i = 0; i <= final_offset; i++) {
+        sum += crackerindex[i].m_key;
+    }
+    return sum;
 }

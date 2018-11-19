@@ -19,3 +19,4 @@ int64_t scanQuery(IndexEntry * crackerindex, int64_t min_bounds, int64_t max_bou
 void exchange(IndexEntry*& c, int64_t x1, int64_t x2);
 int64_t find_median(IndexEntry * crackerindex, int64_t lower_limit, int64_t upper_limit);
 void generate_partitions_order(int64_t * partitions, int64_t min, int64_t max);
+int64_t scanQuery(IndexEntry * crackerindex,int64_t final_offset);
