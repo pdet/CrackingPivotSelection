@@ -21,87 +21,27 @@
 #pragma clang diagnostic ignored "-Wformat"
 
 //Settings Pivot Types
-const int PIVOT_WORKLOAD = 0;
-extern int PIVOT_RANDOM_WITHIN_PREDICATE_PIECE,PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE,PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE;
-extern int PIVOT_RANDOM_WITHIN_QUERY_PIECES,PIVOT_RANDOM_MEDIAN_WITHIN_QUERY_PIECES,PIVOT_MEDIAN_WITHIN_QUERY_PIECES;
-extern int PIVOT_RANDOM, PIVOT_RANDOM_MEDIAN = 5,PIVOT_MEDIAN = 6;
+const int PIVOT_EXACT_PREDICATE = 0, PIVOT_WITHIN_QUERY_PREDICATE=1,PIVOT_WITHIN_QUERY=2,PIVOT_WITHIN_COLUMN=3;
+
+// Which Piece to crack ( Work for PIVOT_WITHIN_QUERY PIVOT_WITHIN_COLUMN)
+const int RANDOM_PIECE=0 ,BIGGEST_PIECE=1;
+
+//Setting Pivot Selection Within Pieces (Work for : PIVOT_WITHIN_QUERY_PREDICATE PIVOT_WITHIN_QUERY PIVOT_WITHIN_COLUMN)
+const int RANDOM = 0, MEDIAN = 1, APPROXIMATE_MEDIAN=2;
 
 string COLUMN_FILE_PATH, QUERIES_FILE_PATH, ANSWER_FILE_PATH;
 int64_t  COLUMN_SIZE,NUM_QUERIES;
-extern int PIVOT_TYPE;
-struct QueryOutput *qo;	// actual query output
+int PIVOT_TYPE;
+int PIVOT_SELECTION;
+int PIECE_TO_CRACK;
 
 #define DEBUG
 
 using namespace std;
 
-void full_scan(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
-    chrono::time_point<chrono::system_clock> start, end;
-    for (int i = 0; i < NUM_QUERIES; i++) {
-        start = chrono::system_clock::now();
-        int64_t sum = range_query_baseline(column.data, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i]);
-        end = chrono::system_clock::now();
-        time[i] = chrono::duration<double>(end - start).count();
-        if (sum != answers[i]){
-            fprintf(stderr, "Incorrect Results on query %lld\n Expected : %lld    Got : %lld \n", i, answers[i], sum);
-        }
-#ifndef DEBUG
-        cout << time[i] << "\n";
-#endif
-    }
-}
-
-AvlTree cracking_median(AvlTree T,IndexEntry * crackerindex,  std::queue<int_pair> * median, int64_t left_query, int64_t right_query){
-    int64_t median_value =  find_median(crackerindex,  median->front().first,  median->front().second);
-//    T = standardCracking(crackerindex , COLUMN_SIZE, T, left_query,right_query,qo, median_value);
-    int64_t median_offset = lookup(median_value,T);
-    median->push({median->front().first,median_offset});
-    median->push({median_offset,median->front().second});
-    median->pop();
-    return T;
-
-}
-
-AvlTree cracking_median_random(AvlTree T,IndexEntry * crackerindex,  std::queue<int_pair> * median, int64_t left_query, int64_t right_query){
-    int64_t median_value =  crackerindex[(median->front().first +median->front().second)/2].m_key;
-//    T = standardCracking(crackerindex , COLUMN_SIZE, T, left_query,right_query,qo, median_value);
-    int64_t median_offset = lookup(median_value,T);
-    median->push({median->front().first,median_offset});
-    median->push({median_offset,median->front().second});
-    median->pop();
-    return T;
-
-}
-
-//AvlTree pivot_selection(AvlTree T,IndexEntry * crackerindex,  std::queue<int_pair> * median, int64_t left_query, int64_t right_query){
-//    int64_t aux_1,aux_2,left_pivot,right_pivot,offset1, offset2,median_value;
-//    IntPair p1,p2;
-//    switch(PIVOT_TYPE){
-////        case PIVOT_RANDOM:
-////            aux_1 = rand() % COLUMN_SIZE;
-////            aux_2 = rand() % COLUMN_SIZE;
-////            left_pivot = std::min(aux_1,aux_2);
-////            right_pivot = std::max(aux_1,aux_2);
-////            T = standardCracking(crackerindex , COLUMN_SIZE, T, left_query,right_query,qo, left_pivot);
-////            T = standardCracking(crackerindex , COLUMN_SIZE, T, left_query,right_query,qo, right_pivot);
-////            return T;
-////        case PIVOT_RANDOM_MEDIAN:
-////            T = cracking_median_random(T,crackerindex,median,left_query,right_query);
-////            T = cracking_median_random(T,crackerindex,median,left_query,right_query);
-////            return T;
-////        case PIVOT_MEDIAN:
-////            T = cracking_median(T,crackerindex,median,left_query,right_query);
-////            T = cracking_median(T,crackerindex,median,left_query,right_query);
-////            return T;
-//    }
-//}
-
-
-void cracking(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
+void cracking_exact_predicate(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
     chrono::time_point<chrono::system_clock> start, end;
     chrono::duration<double> elapsed_seconds;
-    std::queue<int_pair> median;
-    median.push(int_pair{1,COLUMN_SIZE-1});
     start = chrono::system_clock::now();
     IndexEntry *crackercolumn = (IndexEntry *) malloc(column.data.size() * 2 * sizeof(int64_t));
     //Creating Cracker Column
@@ -117,16 +57,25 @@ void cracking(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers
     for (size_t i = 0; i < NUM_QUERIES; i++) {
         start = chrono::system_clock::now();
         //Partitioning Column and Inserting in Cracker Indexing
-        T = standardCracking(crackercolumn , COLUMN_SIZE, T, rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i]);
-        T = standardCracking(crackercolumn , COLUMN_SIZE, T, rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i]);
-        //Querying
-        IntPair p1 = FindNeighborsGTE(rangeQueries.leftpredicate[i], (AvlTree)T, column.data.size()-1);
-        IntPair p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], (AvlTree)T, column.data.size()-1);
-        int64_t offset1 = p1->first;
-        int64_t offset2 = p2->second;
-        free(p1);
-        free(p2);
-        int64_t sum = scanQuery(crackercolumn,rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i], offset1, offset2);
+        IntPair p1, p2;
+        int64_t offset,sum=0;
+
+        p1 = FindNeighborsLT(rangeQueries.leftpredicate[i], T, COLUMN_SIZE - 1);
+        p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], T, COLUMN_SIZE - 1);
+
+        if (p1->first == p2->first && p1->second == p2->second) {
+            offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, rangeQueries.leftpredicate[i]);
+            T = Insert(offset, rangeQueries.leftpredicate[i], T);
+        }
+        else {
+            offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, rangeQueries.leftpredicate[i]);
+            T = Insert(offset, rangeQueries.leftpredicate[i], T);
+            offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, rangeQueries.rightpredicate[i]);
+            T = Insert(offset, rangeQueries.leftpredicate[i], T);
+            if (p1->second+1 != p2->first)
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
+        }
+
         end = chrono::system_clock::now();
         time[i] += chrono::duration<double>(end - start).count();
         if (sum != answers[i])
@@ -139,11 +88,9 @@ void cracking(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers
     free(crackercolumn);
 }
 
-void cracking_within_piece(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
+void cracking_within_predicate_piece(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
     chrono::time_point<chrono::system_clock> start, end;
     chrono::duration<double> elapsed_seconds;
-    std::queue<int_pair> median;
-    median.push(int_pair{1,COLUMN_SIZE-1});
     start = chrono::system_clock::now();
     IndexEntry *crackercolumn = (IndexEntry *) malloc(column.data.size() * 2 * sizeof(int64_t));
     //Creating Cracker Column
@@ -154,44 +101,70 @@ void cracking_within_piece(Column& column, RangeQuery& rangeQueries, vector<int6
     //Initialitizing Cracker Index
     AvlTree T = NULL;
     //Intializing Query Output
-    qo = (QueryOutput*) malloc(sizeof(struct QueryOutput));
-    qo->sum = 0;
     end = chrono::system_clock::now();
     time[0] += chrono::duration<double>(end - start).count();
 
     for (int i = 0; i < NUM_QUERIES; i++) {
-        qo->view1 = NULL;
-        qo->view_size1 = 0;
-        qo->view2 = NULL;
-        qo->view_size2 = 0;
-        qo->middlePart = NULL;
-        qo->middlePart_size = 0;
-        qo->sum = 0;
         start = chrono::system_clock::now();
-        //Partitioning Column and Inserting in Cracker Indexing
-        T = standardCrackingWithinPiece(crackercolumn , COLUMN_SIZE, T, rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i],qo);
-        //Querying
-        if(qo->view1 &&  qo->view_size1 > 0) {
-            qo->sum += scanQuery(qo->view1, qo->view_size1-1);
+        IntPair p1,p2;
+        int64_t offset,sum=0;
+        p1 = FindNeighborsLT(rangeQueries.leftpredicate[i], T, COLUMN_SIZE-1);
+        p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], T, COLUMN_SIZE-1);
+        int64_t pivot_1 = 0, pivot_2 = 0;
+
+        if(p1->first==p2->first && p1->second==p2->second){
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    pivot_1 = (rand() % (p1->second-p1->first)) + p1->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 =  crackercolumn[(p1->first+p1->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    find_median(crackercolumn,  p1->first,  p1->second);
+                    break;
+            }
+            offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
+            T = Insert(offset, pivot_1, T);
         }
-        if(qo->middlePart_size > 0) {
-            qo->sum += scanQuery(qo->middlePart, qo->middlePart_size-1);
+        else{
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    if (p1->second !=p1->first)
+                        pivot_1 = (rand() %  (p1->second-p1->first)) + p1->first;
+                    else
+                        pivot_1 = p1->first;
+                    if (p2->second !=p2->first)
+                        pivot_2 = (rand() %  (p2->second-p2->first)) + p2->first;
+                    else
+                        pivot_2 = p1->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    pivot_2 = crackercolumn[pivot_2].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 = crackercolumn[(p1->first+p1->second)/2].m_key;
+                    pivot_2 = crackercolumn[(p2->first+p2->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    pivot_1 =  find_median(crackercolumn,  p1->first,  p1->second);
+                    pivot_2 =  find_median(crackercolumn,  p2->first,  p2->second);
+                    break;
+            }
+
+            offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+            T = Insert(offset, pivot_1, T);
+            offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+            T = Insert(offset, pivot_2, T);
+            if (p1->second+1 != p2->first)
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
         }
-        if(qo->view2 &&  qo->view_size2 > 0) {
-            qo->sum += scanQuery(qo->view2,qo->view_size2-1);
-        }
-        if(qo->view1) {
-            free(qo->view1);
-            qo->view1 = NULL;
-        }
-        if(qo->view2) {
-            free(qo->view2);
-            qo->view2 = NULL;
-        }
+        free(p1);
+        free(p2);
         end = chrono::system_clock::now();
         time[i] += chrono::duration<double>(end - start).count();
-        if (qo->sum != answers[i])
-            fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], qo->sum );
+        if (sum != answers[i])
+            fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
 #ifndef DEBUG
         cout << time[i] << "\n";
 #endif
@@ -200,6 +173,383 @@ void cracking_within_piece(Column& column, RangeQuery& rangeQueries, vector<int6
     free(crackercolumn);
 }
 
+void crack_within_query(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
+    chrono::time_point<chrono::system_clock> start, end;
+    chrono::duration<double> elapsed_seconds;
+    start = chrono::system_clock::now();
+    IndexEntry *crackercolumn = (IndexEntry *) malloc(column.data.size() * 2 * sizeof(int64_t));
+    //Creating Cracker Column
+    for (size_t i = 0; i < column.data.size(); i++) {
+        crackercolumn[i].m_key = column.data[i];
+        crackercolumn[i].m_rowId = i;
+    }
+    //Initialitizing Cracker Index
+    AvlTree T = NULL;
+    //Intializing Query Output
+    end = chrono::system_clock::now();
+    time[0] += chrono::duration<double>(end - start).count();
+
+    for (int i = 0; i < NUM_QUERIES; i++) {
+        start = chrono::system_clock::now();
+        IntPair p1,p2;
+        IntPair pivotPiece1,pivotPiece2,auxPiece;
+        int64_t offset,sum=0;
+        p1 = FindNeighborsLT(rangeQueries.leftpredicate[i], T, COLUMN_SIZE-1);
+        p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], T, COLUMN_SIZE-1);
+        int64_t pivot_1 = 0, pivot_2 = 0;
+        switch(PIECE_TO_CRACK){
+            case BIGGEST_PIECE:
+                FindTwoBiggestPieces(rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i], T, COLUMN_SIZE-1, crackercolumn, pivotPiece1, pivotPiece2);
+                if(pivotPiece2->first < pivotPiece1->first){
+                    auxPiece = (IntPair) malloc(sizeof(struct int_pair));
+                    auxPiece = pivotPiece1;
+                    pivotPiece1 = pivotPiece2;
+                    pivotPiece2 = auxPiece;
+                    free(auxPiece);
+                }
+                break;
+
+            case RANDOM_PIECE:
+                pivot_1 = (rand() %  (p2->second-p1->first)) + p1->first;
+                pivot_2 = (rand() %  (p2->second-p1->first)) + p1->first;
+                int64_t aux = std::max(pivot_1,pivot_2);
+                pivot_1 = std::min(pivot_1,pivot_2);
+                pivot_2 = aux;
+                pivotPiece1 = FindNeighborsLT(crackercolumn[pivot_1].m_key, T, COLUMN_SIZE-1);
+                pivotPiece2 = FindNeighborsLT(crackercolumn[pivot_2].m_key, T, COLUMN_SIZE-1);
+                break;
+        }
+        if(pivotPiece1->first==pivotPiece2->first && pivotPiece1->second==pivotPiece2->second){
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    pivot_1 = (rand() % (pivotPiece1->second-pivotPiece1->first)) + pivotPiece1->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 =  crackercolumn[(pivotPiece1->first+pivotPiece1->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    pivot_1 = find_median(crackercolumn,  pivotPiece1->first,  pivotPiece1->second);
+                    break;
+            }
+            if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second && pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
+                offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
+            }
+
+            else if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                sum += scan_right_piece(crackercolumn, p1->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            else if (pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
+                offset = crackPieceWithRightPredicate(crackercolumn, pivotPiece1->first, pivotPiece1->second, rangeQueries.rightpredicate[i], &sum, pivot_1);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+            }
+            else{
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second,&sum, pivot_1);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_right_piece(crackercolumn, pivotPiece1->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            T = Insert(offset, pivot_1, T);
+        }
+
+        else{
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    if (pivotPiece1->second !=pivotPiece1->first)
+                        pivot_1 = (rand() %  (pivotPiece1->second-pivotPiece1->first)) + pivotPiece1->first;
+                    else
+                        pivot_1 = pivotPiece1->first;
+                    if (pivotPiece2->second !=pivotPiece2->first)
+                        pivot_2 = (rand() %  (pivotPiece2->second-pivotPiece2->first)) + pivotPiece2->first;
+                    else
+                        pivot_2 = pivotPiece2->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    pivot_2 = crackercolumn[pivot_2].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 = crackercolumn[(pivotPiece1->first+pivotPiece1->second)/2].m_key;
+                    pivot_2 = crackercolumn[(pivotPiece2->first+pivotPiece2->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    pivot_1 =  find_median(crackercolumn,  pivotPiece1->first,  pivotPiece1->second);
+                    pivot_2 =  find_median(crackercolumn,  pivotPiece2->first,  pivotPiece2->second);
+                    break;
+            }
+            if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second && pivotPiece2->first==p2->first && pivotPiece2->second==p2->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
+            }
+            else if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, pivotPiece2->first);
+                sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            else if (pivotPiece2->first==p2->first && pivotPiece2->second==p2->second){
+                offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, p2->first);
+            }
+            else{
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, pivotPiece2->first);
+                sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second, rangeQueries.rightpredicate[i]);
+            }
+        }
+        free(p1);
+        free(p2);
+        end = chrono::system_clock::now();
+        time[i] += chrono::duration<double>(end - start).count();
+        if (sum != answers[i])
+            fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
+#ifndef DEBUG
+        cout << time[i] << "\n";
+#endif
+
+    }
+    free(crackercolumn);
+}
+
+void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_t> &answers, vector<double>& time) {
+    chrono::time_point<chrono::system_clock> start, end;
+    chrono::duration<double> elapsed_seconds;
+    start = chrono::system_clock::now();
+    IndexEntry *crackercolumn = (IndexEntry *) malloc(column.data.size() * 2 * sizeof(int64_t));
+    //Creating Cracker Column
+    for (size_t i = 0; i < column.data.size(); i++) {
+        crackercolumn[i].m_key = column.data[i];
+        crackercolumn[i].m_rowId = i;
+    }
+    //Initialitizing Cracker Index
+    AvlTree T = NULL;
+    //Intializing Query Output
+    end = chrono::system_clock::now();
+    time[0] += chrono::duration<double>(end - start).count();
+
+    for (int i = 0; i < NUM_QUERIES; i++) {
+        start = chrono::system_clock::now();
+        IntPair p1,p2;
+        IntPair pivotPiece1,pivotPiece2,auxPiece;
+        int64_t offset,sum=0;
+        p1 = FindNeighborsLT(rangeQueries.leftpredicate[i], T, COLUMN_SIZE-1);
+        p2 = FindNeighborsLT(rangeQueries.rightpredicate[i], T, COLUMN_SIZE-1);
+        int64_t pivot_1 = 0, pivot_2 = 0;
+        switch(PIECE_TO_CRACK){
+            case BIGGEST_PIECE:
+                FindTwoBiggestPieces(0,INT64_MAX, T, COLUMN_SIZE-1, crackercolumn, pivotPiece1, pivotPiece2);
+                if(pivotPiece2->first < pivotPiece1->first){
+                    auxPiece = (IntPair) malloc(sizeof(struct int_pair));
+                    auxPiece = pivotPiece1;
+                    pivotPiece1 = pivotPiece2;
+                    pivotPiece2 = auxPiece;
+                    free(auxPiece);
+                }
+                break;
+
+            case RANDOM_PIECE:
+                pivot_1 = rand() %  COLUMN_SIZE-1;;
+                pivot_2 = rand() %  COLUMN_SIZE-1;
+                int64_t aux = std::max(pivot_1,pivot_2);
+                pivot_1 = std::min(pivot_1,pivot_2);
+                pivot_2 = aux;
+                pivotPiece1 = FindNeighborsLT(crackercolumn[pivot_1].m_key, T, COLUMN_SIZE-1);
+                pivotPiece2 = FindNeighborsLT(crackercolumn[pivot_2].m_key, T, COLUMN_SIZE-1);
+                break;
+        }
+        if(pivotPiece1->first==pivotPiece2->first && pivotPiece1->second==pivotPiece2->second){
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    pivot_1 = (rand() % (pivotPiece1->second-pivotPiece1->first)) + pivotPiece1->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 =  crackercolumn[(pivotPiece1->first+pivotPiece1->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    pivot_1 = find_median(crackercolumn,  pivotPiece1->first,  pivotPiece1->second);
+                    break;
+            }
+            if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second && pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
+                offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
+            }
+
+            else if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                sum += scan_right_piece(crackercolumn, p1->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            else if (pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
+                offset = crackPieceWithRightPredicate(crackercolumn, pivotPiece1->first, pivotPiece1->second, rangeQueries.rightpredicate[i], &sum, pivot_1);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+            }
+            else if (pivotPiece1->second < p1->first || pivotPiece1->first > p2->second){
+                offset = crackPieceOutsideQuery(crackercolumn,pivotPiece1->first,pivotPiece2->second,pivot_1);
+                sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
+                sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            else{
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second,&sum, pivot_1);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_right_piece(crackercolumn, pivotPiece1->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            T = Insert(offset, pivot_1, T);
+        }
+
+        else{
+            switch(PIVOT_SELECTION){
+                case RANDOM:
+                    if (pivotPiece1->second !=pivotPiece1->first)
+                        pivot_1 = (rand() %  (pivotPiece1->second-pivotPiece1->first)) + pivotPiece1->first;
+                    else
+                        pivot_1 = pivotPiece1->first;
+                    if (pivotPiece2->second !=pivotPiece2->first)
+                        pivot_2 = (rand() %  (pivotPiece2->second-pivotPiece2->first)) + pivotPiece2->first;
+                    else
+                        pivot_2 = pivotPiece2->first;
+                    pivot_1 = crackercolumn[pivot_1].m_key;
+                    pivot_2 = crackercolumn[pivot_2].m_key;
+                    break;
+                case APPROXIMATE_MEDIAN:
+                    pivot_1 = crackercolumn[(pivotPiece1->first+pivotPiece1->second)/2].m_key;
+                    pivot_2 = crackercolumn[(pivotPiece2->first+pivotPiece2->second)/2].m_key;
+                    break;
+                case MEDIAN:
+                    pivot_1 =  find_median(crackercolumn,  pivotPiece1->first,  pivotPiece1->second);
+                    pivot_2 =  find_median(crackercolumn,  pivotPiece2->first,  pivotPiece2->second);
+                    break;
+            }
+            if ((pivotPiece1->second < p1->first || pivotPiece1->first > p2->second) && (pivotPiece2->second < p1->first || pivotPiece2->first > p2->second)){
+                offset = crackPieceOutsideQuery(crackercolumn,pivotPiece1->first,pivotPiece1->second,pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceOutsideQuery(crackercolumn,pivotPiece2->first,pivotPiece2->second,pivot_2);
+                T = Insert(offset, pivot_2, T);
+                if (p1->first == p2->first && p1->second == p2->second)
+                    sum +=scan_left_right_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i]);
+                else{
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
+                    if(p1->second+1 != p2->first)
+                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                    sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+                }
+            }
+            else if (pivotPiece1->second < p1->first || pivotPiece1->first > p2->second){
+                offset = crackPieceOutsideQuery(crackercolumn,pivotPiece1->first,pivotPiece1->second,pivot_1);
+                T = Insert(offset, pivot_1, T);
+
+                if (pivotPiece2->first==p1->first && pivotPiece2->second==p1->second){
+                    if (p1->first == p2->first && p1->second == p2->second){
+                        offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i], &sum, pivot_2);
+                        T = Insert(offset, pivot_2, T);
+                    }
+                    else{
+                        offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_2);
+                        T = Insert(offset, pivot_2, T);
+                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                        sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+                    }
+
+                }
+                else if (pivotPiece2->first==p2->first && pivotPiece2->second==p2->second){
+                    offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+                    T = Insert(offset, pivot_2, T);
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
+                    sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                }
+                else{
+                    offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
+                    T = Insert(offset, pivot_2, T);
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i]);
+                    sum += scan_middle_pieces(crackercolumn, p1->second+1, pivotPiece2->first);
+                    sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second, rangeQueries.rightpredicate[i]);
+                }
+            }
+            else if (pivotPiece2->second < p1->first || pivotPiece2->first > p2->second){
+                offset = crackPieceOutsideQuery(crackercolumn,pivotPiece2->first,pivotPiece2->second,pivot_2);
+                T = Insert(offset, pivot_2, T);
+                if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second){
+                    if (p1->first == p2->first && p1->second == p2->second)
+                        offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
+                    else{
+                        offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                        sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+                    }
+                    T = Insert(offset, pivot_1, T);
+
+                }
+                else if (pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
+                    offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_1);
+                    T = Insert(offset, pivot_1, T);
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
+                    sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
+                }
+                else{
+                    offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
+                    T = Insert(offset, pivot_1, T);
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i]);
+                    sum += scan_middle_pieces(crackercolumn, p1->second+1, pivotPiece1->first);
+                    sum += scan_right_piece(crackercolumn, pivotPiece1->second+1, p2->second, rangeQueries.rightpredicate[i]);
+                }
+            }
+            else if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second && pivotPiece2->first==p2->first && pivotPiece2->second==p2->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
+            }
+            else if (pivotPiece1->first==p1->first && pivotPiece1->second==p1->second){
+                offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_middle_pieces(crackercolumn, p1->second+1, pivotPiece2->first);
+                sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second,rangeQueries.rightpredicate[i]);
+            }
+            else if (pivotPiece2->first==p2->first && pivotPiece2->second==p2->second){
+                offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, p2->first);
+            }
+            else{
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
+                T = Insert(offset, pivot_1, T);
+                offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
+                T = Insert(offset, pivot_2, T);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, pivotPiece2->first);
+                sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second, rangeQueries.rightpredicate[i]);
+            }
+        }
+        free(p1);
+        free(p2);
+        end = chrono::system_clock::now();
+        time[i] += chrono::duration<double>(end - start).count();
+//        fprintf(stderr,"tim is an asshole %zu \n", i);
+        if (sum != answers[i])
+            fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
+#ifndef DEBUG
+        cout << time[i] << "\n";
+#endif
+
+    }
+    free(crackercolumn);
+}
 
 
 void print_help(int argc, char** argv) {
@@ -210,8 +560,10 @@ void print_help(int argc, char** argv) {
     fprintf(stderr, "   --answers-path\n");
     fprintf(stderr, "   --num-queries\n");
     fprintf(stderr, "   --column-size\n");
-    fprintf(stderr, "   --indexing-type\n");
-    fprintf(stderr, "   --delta\n");
+    fprintf(stderr, "   --pivot-type\n");
+    fprintf(stderr, "   --pivot-selection\n");
+    fprintf(stderr, "   --piece-to-crack\n");
+
 }
 
 pair<string,string> split_once(string delimited, char delimiter) {
@@ -226,7 +578,9 @@ int main(int argc, char** argv) {
 
     NUM_QUERIES = 1000;
     COLUMN_SIZE = 10000000;
-    PIVOT_TYPE = 6;
+    PIVOT_TYPE = 0;
+    PIVOT_SELECTION = 0;
+    PIECE_TO_CRACK = 0;
 
     for(int i = 1; i < argc; i++) {
         auto arg = string(argv[i]);
@@ -249,16 +603,16 @@ int main(int argc, char** argv) {
             COLUMN_SIZE = atoi(arg_value.c_str());
         } else if (arg_name == "pivot-type") {
             PIVOT_TYPE = atoi(arg_value.c_str());
+        } else if (arg_name == "pivot-selection") {
+            PIVOT_SELECTION = atoi(arg_value.c_str());
+        } else if (arg_name == "piece-to-crack") {
+            PIECE_TO_CRACK = atoi(arg_value.c_str());
         }
         else {
             print_help(argc, argv);
             exit(EXIT_FAILURE);
         }
     }
-
-    PIVOT_RANDOM_WITHIN_PREDICATE_PIECE = 1;
-    PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE = 2;
-    PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE = 3;
 
     chrono::time_point<chrono::system_clock> start, middle, end;
     chrono::duration<double> elapsed_seconds;
@@ -277,12 +631,18 @@ int main(int argc, char** argv) {
 
     vector<double> times(NUM_QUERIES);
 
-
-    if (PIVOT_TYPE == PIVOT_WORKLOAD){
-        cracking(c, rangequeries, answers, times);
+    switch(PIVOT_TYPE){
+        case PIVOT_EXACT_PREDICATE:
+            cracking_exact_predicate(c, rangequeries, answers, times);
+            break;
+        case PIVOT_WITHIN_QUERY_PREDICATE:
+            cracking_within_predicate_piece(c, rangequeries, answers, times);
+            break;
+        case PIVOT_WITHIN_QUERY:
+            crack_within_query(c, rangequeries, answers, times);
+            break;
+        case PIVOT_WITHIN_COLUMN:
+            crack_within_column(c, rangequeries, answers, times);
+            break;
     }
-    else if (PIVOT_TYPE == PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE || PIVOT_TYPE == PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE ||PIVOT_TYPE == PIVOT_RANDOM_WITHIN_PREDICATE_PIECE){
-        cracking_within_piece(c, rangequeries, answers, times);
-    }
-
 }

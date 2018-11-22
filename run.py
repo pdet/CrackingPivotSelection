@@ -10,15 +10,20 @@ SEQUENTIAL = "2"  # Sequential only works for queries
 SKEWED = "3"
 MIXED = "4" # Mixed only works for queries
 
+#Settings Pivot Types
+PIVOT_EXACT_PREDICATE = "0"
+PIVOT_WITHIN_QUERY_PREDICATE="1"
+PIVOT_WITHIN_QUERY="2"
+PIVOT_WITHIN_COLUMN="3"
 
-# Setting Values For Pivoting
-PIVOT_WORKLOAD = "0";
-PIVOT_RANDOM_WITHIN_PREDICATE_PIECE = "1";
-PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE = "2";
-PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE = "3";
-PIVOT_RANDOM_WITHIN_QUERY_PIECES = "4"
-PIVOT_APPROX_MEDIAN_WITHIN_QUERY_PIECES = "5"
-PIVOT_MEDIAN_WITHIN_QUERY_PIECES = "6"
+#Settings Pieces To Crack Types ( Work for PIVOT_WITHIN_QUERY PIVOT_WITHIN_COLUMN)
+ANY_PIECE = "0"
+BIGGEST_PIECE = "1"
+
+#Settings Pivot Selection Types (Work for : PIVOT_WITHIN_QUERY_PREDICATE PIVOT_WITHIN_QUERY PIVOT_WITHIN_COLUMN)
+RANDOM_P = "0"
+MEDIAN = "1"
+APPROXIMATE_MEDIAN = "2"
 
 COLUMN_SIZE = 10000000
 UPPERBOUND = 100000000
@@ -134,42 +139,45 @@ q_path = query_path(experiment_path,QUERY_SELECTIVITY,SKEWED)
 a_path = answer_path(experiment_path,QUERY_SELECTIVITY,SKEWED)
 generate_query(NUM_QUERIES,COLUMN_SIZE,UPPERBOUND,experiment_path,q_path,a_path,QUERY_SELECTIVITY,SKEWED)
 
-
-def run_experiment_correctness(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND,QUERY_PATTERN,QUERY_SELECTIVITY,experiment_test):
+def run_experiment(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND,QUERY_PATTERN,QUERY_SELECTIVITY,PIVOT_TYPE, PIVOT_SELECTION_TYPE=0,PIECE_TO_CRACK_TYPE=0,CORRECTNESS=True):
     COLUMN_PATH = column_path(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND)
     QUERY_PATH = query_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
     ANSWER_PATH = answer_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
-    for algorithm in experiment_test:
-        codestr ="./main --num-queries=" + str(NUM_QUERIES) + " --column-size=" + str(COLUMN_SIZE) + \
-                 " --pivot-type="+str(algorithm)+ " --column-path=" + str(COLUMN_PATH + "column") + " --query-path=" \
-                 + str(QUERY_PATH) + " --answer-path=" + str(ANSWER_PATH)
-        print(codestr)
+    codestr ="./main --num-queries=" + str(NUM_QUERIES) + " --column-size=" + str(COLUMN_SIZE) + \
+         " --pivot-type="+str(PIVOT_TYPE)+ " --column-path=" + str(COLUMN_PATH + "column") + " --query-path=" \
+         + str(QUERY_PATH) + " --answer-path=" + str(ANSWER_PATH) + " --pivot-selection=" + str(PIVOT_SELECTION_TYPE) + " --piece-to-crack="+ str(PIECE_TO_CRACK_TYPE)
+    print(codestr)
+    if CORRECTNESS:
         if os.system(codestr) != 0:
             print("Failed!")
+    else:
+        result = os.popen(codestr).read()
+        file = create_output()
+        generate_output(file,result,repetition,PIVOT_TYPE,QUERY_PATTERN,COLUMN_PATTERN)
 
-def run_experiment(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND,QUERY_PATTERN,QUERY_SELECTIVITY,experiment_test):
-    for repetition in range(NUMBER_OF_REPETITIONS):
-        getFolderToSaveExperiments(COLUMN_PATTERN+"_"+QUERY_PATTERN+ "/")
-        COLUMN_PATH = column_path(COLUMN_PATTERN,COLUMN_SIZE,COLUMN_UPPERBOUND)
-        QUERY_PATH = query_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
-        ANSWER_PATH = answer_path(COLUMN_PATH,QUERY_SELECTIVITY,QUERY_PATTERN)
-        for algorithm in experiment_test:
-            codestr ="./main --num-queries=" + str(NUM_QUERIES) + " --column-size=" + str(COLUMN_SIZE) + \
-                     " --pivot-type="+str(algorithm)+ " --column-path=" + str(COLUMN_PATH + "column") + " --query-path=" \
-                     + str(QUERY_PATH) + " --answer-path=" + str(ANSWER_PATH)
-            print(codestr)
-            result = os.popen(codestr).read()
-            file = create_output()
-            generate_output(file,result,repetition,algorithm,QUERY_PATTERN,COLUMN_PATTERN)
+def run_all_workloads(PIVOT_TYPE, PIVOT_SELECTION_TYPE=0,PIECE_TO_CRACK_TYPE=0):
+        run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,RANDOM,QUERY_SELECTIVITY,PIVOT_TYPE,PIVOT_SELECTION_TYPE,PIECE_TO_CRACK_TYPE)
+        run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,SEQUENTIAL,QUERY_SELECTIVITY,PIVOT_TYPE,PIVOT_SELECTION_TYPE,PIECE_TO_CRACK_TYPE)
+        run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,PIVOT_TYPE,PIVOT_SELECTION_TYPE,PIECE_TO_CRACK_TYPE)
+        run_experiment(RANDOM,COLUMN_SIZE,UPPERBOUND,MIXED,QUERY_SELECTIVITY,PIVOT_TYPE,PIVOT_SELECTION_TYPE,PIECE_TO_CRACK_TYPE)
+        run_experiment(SKEWED,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,PIVOT_TYPE,PIVOT_SELECTION_TYPE,PIECE_TO_CRACK_TYPE)
 
 def test_correctness():
-    EXPERIMENTS = [PIVOT_WORKLOAD,PIVOT_RANDOM_WITHIN_PREDICATE_PIECE,PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE,PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE]
-    for experiment_test in EXPERIMENTS:
-        run_experiment_correctness(RANDOM,COLUMN_SIZE,UPPERBOUND,RANDOM,QUERY_SELECTIVITY,experiment_test)
-        run_experiment_correctness(RANDOM,COLUMN_SIZE,UPPERBOUND,SEQUENTIAL,QUERY_SELECTIVITY,experiment_test)
-        run_experiment_correctness(RANDOM,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,experiment_test)
-        run_experiment_correctness(RANDOM,COLUMN_SIZE,UPPERBOUND,MIXED,QUERY_SELECTIVITY,experiment_test)
-        run_experiment_correctness(SKEWED,COLUMN_SIZE,UPPERBOUND,SKEWED,QUERY_SELECTIVITY,experiment_test)
+    # PIVOT_TYPES_LIST = [PIVOT_EXACT_PREDICATE,PIVOT_WITHIN_QUERY_PREDICATE,PIVOT_WITHIN_QUERY]
+    PIVOT_TYPES_LIST = [PIVOT_WITHIN_QUERY]
+
+    PIVOT_SELECTION_LIST = [RANDOM_P,MEDIAN,APPROXIMATE_MEDIAN]
+    PIECE_TO_CRACK_LIST = [BIGGEST_PIECE]
+    for pivot_type in PIVOT_TYPES_LIST:
+        if pivot_type == PIVOT_EXACT_PREDICATE:
+            run_all_workloads(pivot_type)
+        if pivot_type == PIVOT_WITHIN_QUERY_PREDICATE:
+            for pivot_selection in PIVOT_SELECTION_LIST:
+                run_all_workloads(pivot_type,pivot_selection)
+        if pivot_type == PIVOT_WITHIN_QUERY:
+            for pivot_selection in PIVOT_SELECTION_LIST:
+                for piece_to_crack in PIECE_TO_CRACK_LIST:
+                    run_all_workloads(pivot_type,pivot_selection,piece_to_crack)
 
 def run():
     EXPERIMENTS = [PIVOT_WORKLOAD,PIVOT_RANDOM_WITHIN_PREDICATE_PIECE,PIVOT_APPROX_MEDIAN_WITHIN_PREDICATE_PIECE,PIVOT_MEDIAN_WITHIN_PREDICATE_PIECE]

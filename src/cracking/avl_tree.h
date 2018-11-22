@@ -19,6 +19,8 @@ AvlTree FindFirstPiece( AvlTree T );
 AvlTree FindLastPiece( AvlTree T );
 AvlTree FindNeighborsLTFinal( ElementType X, AvlTree T);
 AvlTree FindNodeLTE( ElementType X, AvlTree T);
+IntPair FindBiggestPiece(int64_t low_key,int64_t high_key, AvlTree T, int64_t limit,IndexEntry*& c);
+void FindTwoBiggestPieces(int64_t low_key,int64_t high_key, AvlTree T, int64_t limit,IndexEntry*& c, IntPair &biggest_piece, IntPair &second_biggest);
 // AvlTree FindNodeLTE( ElementType X, AvlTree T, ElementType limit );
 
 void Print( AvlTree T );

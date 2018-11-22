@@ -329,6 +329,61 @@ void _GetNodesInOrder(AvlTree T, std::vector<AvlTree>& vector) {
     }
 }
 
+IntPair FindBiggestPiece(int64_t low_key,int64_t high_key, AvlTree T, int64_t limit,IndexEntry*& c){
+    IntPair p,p_2,last_piece;
+    int64_t offset_size = 0;
+    p = FindNeighborsLT(low_key, T, limit);
+    last_piece = FindNeighborsLT(high_key, T, limit);
+    if (p->second == limit)
+        return p;
+    offset_size = p->second - p->first;
+    p_2 = FindNeighborsLT(c[p->second+1].m_key, T, limit);
+    if(p_2->second == limit)
+        if (p_2->second - p_2->first > offset_size)
+            return p_2;
+        else
+            return p;
+    while (p_2->first != p->first && p_2->second != p->second ){
+       if (p_2->second - p_2->first > offset_size)
+           p = p_2;
+       if(p_2->first == last_piece->first && p_2->second == last_piece->second)
+           return p;
+        p_2 = FindNeighborsLT(c[p_2->second+1].m_key, T, limit);
+        if (p_2->second - p_2->first > offset_size)
+            return p_2;
+        else
+            return p;
+    }
+}
+
+void FindTwoBiggestPieces(int64_t low_key,int64_t high_key, AvlTree T, int64_t limit,IndexEntry*& c, IntPair &biggest_piece, IntPair &second_biggest){
+    IntPair last_piece, aux,aux_2;
+    int64_t offset_size = 0;
+    biggest_piece = FindNeighborsLT(low_key, T, limit);
+    last_piece = FindNeighborsLT(high_key, T, limit);
+    second_biggest = biggest_piece;
+    if (biggest_piece->second == limit ||biggest_piece->second == last_piece->second){
+        return;
+    }
+    offset_size = biggest_piece->second - biggest_piece->first;
+    aux = FindNeighborsLT(c[biggest_piece->second+1].m_key, T, limit);
+    size_t counter =1;
+    while (aux->first != biggest_piece->first && aux->second != biggest_piece->second && aux->second != limit){
+        if (aux->second - aux->first > offset_size){
+            counter =1;
+            second_biggest = biggest_piece;
+            biggest_piece = aux;
+        }
+        if(aux->first == last_piece->first && aux->second == last_piece->second)
+            return ;
+        aux_2 = FindNeighborsLT(c[aux->second+counter].m_key, T, limit);
+        if (aux->first == aux_2->first && aux->second == aux_2->second)
+            counter++;
+        else aux = aux_2;
+    }
+}
+
+
 
 void Print( AvlTree T ){
 
