@@ -355,7 +355,7 @@ int main(int argc, char** argv) {
         generate_query(&c.data);
     }
     else{
-        fprintf(stderr,"File already exists, delete it first if you want to generate it again.");
+        fprintf(stderr,"File already exists, delete it first if you want to generate it again.\n");
     }
 
 }

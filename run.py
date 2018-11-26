@@ -167,7 +167,7 @@ def test_correctness():
     PIVOT_TYPES_LIST = [PIVOT_WITHIN_QUERY]
 
     PIVOT_SELECTION_LIST = [RANDOM_P,MEDIAN,APPROXIMATE_MEDIAN]
-    PIECE_TO_CRACK_LIST = [BIGGEST_PIECE]
+    PIECE_TO_CRACK_LIST = [ANY_PIECE,BIGGEST_PIECE]
     for pivot_type in PIVOT_TYPES_LIST:
         if pivot_type == PIVOT_EXACT_PREDICATE:
             run_all_workloads(pivot_type)
@@ -175,6 +175,10 @@ def test_correctness():
             for pivot_selection in PIVOT_SELECTION_LIST:
                 run_all_workloads(pivot_type,pivot_selection)
         if pivot_type == PIVOT_WITHIN_QUERY:
+            for pivot_selection in PIVOT_SELECTION_LIST:
+                for piece_to_crack in PIECE_TO_CRACK_LIST:
+                    run_all_workloads(pivot_type,pivot_selection,piece_to_crack)
+        if pivot_type == PIVOT_WITHIN_COLUMN:
             for pivot_selection in PIVOT_SELECTION_LIST:
                 for piece_to_crack in PIECE_TO_CRACK_LIST:
                     run_all_workloads(pivot_type,pivot_selection,piece_to_crack)

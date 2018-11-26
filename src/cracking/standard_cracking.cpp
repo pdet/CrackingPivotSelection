@@ -75,24 +75,39 @@ int64_t crackPieceWithRightPredicate(IndexEntry*& c, int64_t posL, int64_t posH,
 }
 
 int64_t crackPieceOutsideQuery(IndexEntry*& c, int64_t posL, int64_t posH, int64_t pivot){
-    while (posL <= posH) {
-        if(c[posL] < pivot)
+    while(posL <= posH){
+        while(posL<=posH && c[posL]<pivot){
             posL++;
-        else {
-            while (posH >= posL && (c[posH] >= pivot))
-                posH--;
-            if(posL < posH){
-                exchange(c, posL,posH);
-                posH++;
-                posL--;
-            }
+        }
+        while(posL<=posH && c[posH]>=pivot){
+            posH--;
+        }
+        if(posL<posH){
+            exchange(c, posL, posH);
         }
     }
-    posL--;
-    if(posL < 0)
-        posL = 0;
-    return posL;
+    return posL-1;
 }
+
+//int64_t crackPieceOutsideQuery(IndexEntry*& c, int64_t posL, int64_t posH, int64_t pivot){
+//    while (posL <= posH) {
+//        if(c[posL] < pivot)
+//            posL++;
+//        else {
+//            while (posH >= posL && (c[posH] >= pivot))
+//                posH--;
+//            if(posL < posH){
+//                exchange(c, posL,posH);
+//                posH++;
+//                posL--;
+//            }
+//        }
+//    }
+//    posL--;
+//    if(posL < 0)
+//        posL = 0;
+//    return posL;
+//}
 
 int64_t scan_middle_pieces (IndexEntry*& c, int64_t posL, int64_t posH){
     int64_t sum =0;
@@ -103,7 +118,7 @@ int64_t scan_middle_pieces (IndexEntry*& c, int64_t posL, int64_t posH){
 
 int64_t scan_left_piece (IndexEntry*& c, int64_t posL, int64_t posH, int64_t low){
     int64_t sum =0;
-    for (size_t i = posL; i < posH; ++i)
+    for (size_t i = posL; i <= posH; ++i)
         if(c[i]>=low)
             sum+=c[i].m_key;
     return sum;

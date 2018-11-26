@@ -163,6 +163,7 @@ void cracking_within_predicate_piece(Column& column, RangeQuery& rangeQueries, v
         free(p2);
         end = chrono::system_clock::now();
         time[i] += chrono::duration<double>(end - start).count();
+        fprintf(stderr, "QUery %zu \n",i);
         if (sum != answers[i])
             fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
 #ifndef DEBUG
@@ -242,11 +243,11 @@ void crack_within_query(Column& column, RangeQuery& rangeQueries, vector<int64_t
             }
             else if (pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
                 offset = crackPieceWithRightPredicate(crackercolumn, pivotPiece1->first, pivotPiece1->second, rangeQueries.rightpredicate[i], &sum, pivot_1);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1,rangeQueries.leftpredicate[i]);
             }
             else{
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second,&sum, pivot_1);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1,rangeQueries.leftpredicate[i]);
                 sum += scan_right_piece(crackercolumn, pivotPiece1->second+1, p2->second,rangeQueries.rightpredicate[i]);
             }
             T = Insert(offset, pivot_1, T);
@@ -295,7 +296,7 @@ void crack_within_query(Column& column, RangeQuery& rangeQueries, vector<int64_t
                 T = Insert(offset, pivot_2, T);
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
                 T = Insert(offset, pivot_1, T);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1, rangeQueries.leftpredicate[i]);
                 sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, p2->first);
             }
             else{
@@ -303,7 +304,7 @@ void crack_within_query(Column& column, RangeQuery& rangeQueries, vector<int64_t
                 T = Insert(offset, pivot_1, T);
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
                 T = Insert(offset, pivot_2, T);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1, rangeQueries.leftpredicate[i]);
                 sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, pivotPiece2->first);
                 sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second, rangeQueries.rightpredicate[i]);
             }
@@ -391,17 +392,24 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
             }
             else if (pivotPiece1->first==p2->first && pivotPiece1->second==p2->second){
                 offset = crackPieceWithRightPredicate(crackercolumn, pivotPiece1->first, pivotPiece1->second, rangeQueries.rightpredicate[i], &sum, pivot_1);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
             }
             else if (pivotPiece1->second < p1->first || pivotPiece1->first > p2->second){
                 offset = crackPieceOutsideQuery(crackercolumn,pivotPiece1->first,pivotPiece2->second,pivot_1);
-                sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
-                sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
-                sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+
+                if (p1->first == p2->first && p1->second == p2->second)
+                    sum +=scan_left_right_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i],rangeQueries.rightpredicate[i]);
+
+                else{
+                    sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
+                    sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
+                    sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
+                }
+
             }
             else{
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second,&sum, pivot_1);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first,rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1,rangeQueries.leftpredicate[i]);
                 sum += scan_right_piece(crackercolumn, pivotPiece1->second+1, p2->second,rangeQueries.rightpredicate[i]);
             }
             T = Insert(offset, pivot_1, T);
@@ -440,7 +448,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                 else{
                     sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
                     if(p1->second+1 != p2->first)
-                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                        sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
                     sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
                 }
             }
@@ -456,7 +464,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                     else{
                         offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_2);
                         T = Insert(offset, pivot_2, T);
-                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                        sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
                         sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
                     }
 
@@ -465,7 +473,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                     offset = crackPieceWithRightPredicate(crackercolumn, p2->first, p2->second, rangeQueries.rightpredicate[i], &sum, pivot_2);
                     T = Insert(offset, pivot_2, T);
                     sum += scan_left_piece(crackercolumn, p1->first, p1->second,rangeQueries.leftpredicate[i]);
-                    sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                    sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
                 }
                 else{
                     offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
@@ -483,7 +491,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                         offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
                     else{
                         offset = crackPieceWithLeftPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], &sum, pivot_1);
-                        sum += scan_middle_pieces(crackercolumn, p1->second, p2->first);
+                        sum += scan_middle_pieces(crackercolumn, p1->second+1, p2->first);
                         sum += scan_right_piece(crackercolumn, p2->first, p2->second,rangeQueries.rightpredicate[i]);
                     }
                     T = Insert(offset, pivot_1, T);
@@ -523,7 +531,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                 T = Insert(offset, pivot_2, T);
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece1->first, pivotPiece1->second, &sum, pivot_1);
                 T = Insert(offset, pivot_1, T);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1, rangeQueries.leftpredicate[i]);
                 sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, p2->first);
             }
             else{
@@ -531,7 +539,7 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
                 T = Insert(offset, pivot_1, T);
                 offset = crackPieceMiddleQuery(crackercolumn, pivotPiece2->first, pivotPiece2->second, &sum, pivot_2);
                 T = Insert(offset, pivot_2, T);
-                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first, rangeQueries.leftpredicate[i]);
+                sum += scan_left_piece(crackercolumn, p1->first, pivotPiece1->first-1, rangeQueries.leftpredicate[i]);
                 sum += scan_middle_pieces(crackercolumn, pivotPiece1->second+1, pivotPiece2->first);
                 sum += scan_right_piece(crackercolumn, pivotPiece2->second+1, p2->second, rangeQueries.rightpredicate[i]);
             }
@@ -540,7 +548,6 @@ void crack_within_column(Column& column, RangeQuery& rangeQueries, vector<int64_
         free(p2);
         end = chrono::system_clock::now();
         time[i] += chrono::duration<double>(end - start).count();
-//        fprintf(stderr,"tim is an asshole %zu \n", i);
         if (sum != answers[i])
             fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
 #ifndef DEBUG
