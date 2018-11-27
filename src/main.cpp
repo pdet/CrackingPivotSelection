@@ -122,7 +122,7 @@ void cracking_within_predicate_piece(Column& column, RangeQuery& rangeQueries, v
                     pivot_1 =  crackercolumn[(p1->first+p1->second)/2].m_key;
                     break;
                 case MEDIAN:
-                    find_median(crackercolumn,  p1->first,  p1->second);
+                    pivot_1 = find_median(crackercolumn,  p1->first,  p1->second);
                     break;
             }
             offset = crackPieceWithBothQueryPredicate(crackercolumn, p1->first, p1->second, rangeQueries.leftpredicate[i], rangeQueries.rightpredicate[i], &sum, pivot_1);
@@ -163,7 +163,6 @@ void cracking_within_predicate_piece(Column& column, RangeQuery& rangeQueries, v
         free(p2);
         end = chrono::system_clock::now();
         time[i] += chrono::duration<double>(end - start).count();
-        fprintf(stderr, "QUery %zu \n",i);
         if (sum != answers[i])
             fprintf(stderr, "Incorrect Results on query %zu\n Expected : %ld    Got : %ld \n", i,answers[i], sum );
 #ifndef DEBUG
